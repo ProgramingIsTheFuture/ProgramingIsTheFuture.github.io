@@ -1,0 +1,20 @@
+{
+  "version": "https://jsonfeed.org/version/1",
+  "title": "ProgramingIsTheFuture",
+  "home_page_url": "https://example.com/",
+  "feed_url": "https://example.com/feed.json",
+  "description": "Blogs about some interesting topics",
+  "author": {
+    "name": "ProgramingIsTheFuture,",
+    "url": "...."
+  },
+  "items": [
+    {
+      "id": "https://example.com/posts/compilers/",
+      "url": "https://example.com/posts/compilers/",
+      "title": "Compilers",
+      "content_html": "<h1>Tutorial about building compilers</h1>\n<p>In this tutorial we will use the OCaml programing language\nto build a simple compiler.\nI will try to explain it step by step.</p>\n<p>The compiler is divided in this 4 sections:</p>\n<ol>\n<li>Lex</li>\n<li>Parse</li>\n<li>Type Checker</li>\n<li>Compilation</li>\n</ol>\n<h3>AST</h3>\n<p>Before we go to the good parts,\nwe will need to define the syntax of the language\nand how we can represent it in OCaml</p>\n<p>Let's take the Golang syntax.</p>\n<p>Simple go program</p>\n<pre><code class=\"language-golang\">// Defining a function\n// with 2 params and 1 return\nfunc add(a int, b int) int {\n\n  return a + b\n}\n\nfunc main() {\n  // one way to define variables\n  var a int = 10 \n  // another way to define variables\n  b := 25\n\n  // calling functions\n  add(a, b)\n}\n</code></pre>\n<p>The AST (Abstract syntax tree) is used\nto represent the code inside the language we are\nusing to build the compiler.</p>\n<pre><code class=\"language-ocaml\">\ntype value =\n  | VInt of int\n\ntype val = value option\n\ntype typ = string option\n\ntype param = string * string\n\ntype op =\n  | Add\n  | Sub\n\ntype stmt =\n  | Const of value\n  | Var of string * typ * val\n  | Fun of string * (string * string) list * typ * stmt list\n  | Op of stmt * op * stmt\n  | Variable of string\n  | Return of expr\n  | Apply of string * expr list\n\ntype ast = stmt list\n</code></pre>\n<p>With this ast type we can represent the Golang code.\nLet's try converting the golang code into this AST.</p>\n<p>The first function will be:</p>\n<pre><code class=\"language-ocaml\">(* Let's look for the function definition\n  We have a name &quot;add&quot;\n  we have multiple params\n  we have some return type (Void if none)\n  and we have some stmts to execute\n*)\nFun (&quot;add&quot;, [(&quot;a&quot;, int); (&quot;b&quot;, int)], Some (int), \n  Return (\n    Op (\n      Variable (&quot;a&quot;), \n      Add, \n      Variable (&quot;b&quot;)\n    )\n  )  \n)\n</code></pre>\n<p>Let's jump into the Lexer, we will transform the code into TOKENS\nthat we can parse latter</p>\n<h3><em>Lex</em></h3>\n<p>In this part of the compiler, we grab each character/symbol\nand we transform each one into a new Token.</p>\n<p>Example:</p>\n<pre><code class=\"language-ocaml\">  let num = 10;\n</code></pre>\n<pre><code>  In this case, the `let` is a token (we can call it LET), \n  the `num` is another token (we can call it Name and it stores a value),\n  the `=` is another token (EQUAL), \n  the number `10` is yet another token \n  (We can call it INT since there are no decimal values)\n  and finally the `;` that can represent the SEMICOLON token.\n</code></pre>",
+      "date_published": "2022-12-09T00:00:00Z"
+    }
+  ]
+}

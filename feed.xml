@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<feed xmlns="http://www.w3.org/2005/Atom">
+	<title>ProgramingIsTheFuture</title>
+	<subtitle>Blogs about some interesting topics</subtitle>
+	<link href="https://example.com/feed.xml" rel="self"/>
+	<link href="https://example.com/"/>
+	
+	<updated>2022-12-12T19:18:23Z</updated>
+	<id>https://example.com/</id>
+	<author>
+		<name>ProgramingIsTheFuture,</name>
+		<email>franciscosantosfcp@hotmail.com,</email>
+	</author>
+	<entry>
+		<title>Compilers</title>
+		<link href="https://example.com/posts/compilers/"/>
+		<updated>2022-12-09T00:00:00Z</updated>
+		<id>https://example.com/posts/compilers/</id>
+		<content type="html">&lt;h1&gt;Tutorial about building compilers&lt;/h1&gt;
+&lt;p&gt;In this tutorial we will use the OCaml programing language
+to build a simple compiler.
+I will try to explain it step by step.&lt;/p&gt;
+&lt;p&gt;The compiler is divided in this 4 sections:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Lex&lt;/li&gt;
+&lt;li&gt;Parse&lt;/li&gt;
+&lt;li&gt;Type Checker&lt;/li&gt;
+&lt;li&gt;Compilation&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3&gt;AST&lt;/h3&gt;
+&lt;p&gt;Before we go to the good parts,
+we will need to define the syntax of the language
+and how we can represent it in OCaml&lt;/p&gt;
+&lt;p&gt;Let&#39;s take the Golang syntax.&lt;/p&gt;
+&lt;p&gt;Simple go program&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-golang&quot;&gt;// Defining a function
+// with 2 params and 1 return
+func add(a int, b int) int {
+
+  return a + b
+}
+
+func main() {
+  // one way to define variables
+  var a int = 10 
+  // another way to define variables
+  b := 25
+
+  // calling functions
+  add(a, b)
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The AST (Abstract syntax tree) is used
+to represent the code inside the language we are
+using to build the compiler.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;
+type value =
+  | VInt of int
+
+type val = value option
+
+type typ = string option
+
+type param = string * string
+
+type op =
+  | Add
+  | Sub
+
+type stmt =
+  | Const of value
+  | Var of string * typ * val
+  | Fun of string * (string * string) list * typ * stmt list
+  | Op of stmt * op * stmt
+  | Variable of string
+  | Return of expr
+  | Apply of string * expr list
+
+type ast = stmt list
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;With this ast type we can represent the Golang code.
+Let&#39;s try converting the golang code into this AST.&lt;/p&gt;
+&lt;p&gt;The first function will be:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;(* Let&#39;s look for the function definition
+  We have a name &amp;quot;add&amp;quot;
+  we have multiple params
+  we have some return type (Void if none)
+  and we have some stmts to execute
+*)
+Fun (&amp;quot;add&amp;quot;, [(&amp;quot;a&amp;quot;, int); (&amp;quot;b&amp;quot;, int)], Some (int), 
+  Return (
+    Op (
+      Variable (&amp;quot;a&amp;quot;), 
+      Add, 
+      Variable (&amp;quot;b&amp;quot;)
+    )
+  )  
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Let&#39;s jump into the Lexer, we will transform the code into TOKENS
+that we can parse latter&lt;/p&gt;
+&lt;h3&gt;&lt;em&gt;Lex&lt;/em&gt;&lt;/h3&gt;
+&lt;p&gt;In this part of the compiler, we grab each character/symbol
+and we transform each one into a new Token.&lt;/p&gt;
+&lt;p&gt;Example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;  let num = 10;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;  In this case, the `let` is a token (we can call it LET), 
+  the `num` is another token (we can call it Name and it stores a value),
+  the `=` is another token (EQUAL), 
+  the number `10` is yet another token 
+  (We can call it INT since there are no decimal values)
+  and finally the `;` that can represent the SEMICOLON token.
+&lt;/code&gt;&lt;/pre&gt;</content>
+	</entry>
+</feed>

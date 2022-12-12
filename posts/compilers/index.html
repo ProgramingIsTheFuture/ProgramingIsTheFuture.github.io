@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compilers</title>
+    <meta name="description" content="My experience about building compilers in OCaml">
+    <link rel="stylesheet" href="/pagefind/pagefind-ui.css"><link rel="stylesheet" href="/styles.css">
+    <link rel="alternate" href="/feed.xml" type="application/atom+xml" title="ProgramingIsTheFuture">
+    <link rel="alternate" href="/feed.json" type="application/json" title="ProgramingIsTheFuture">
+  <script type="text/javascript" src="/pagefind/pagefind-ui.js"></script><script type="text/javascript">window.addEventListener('DOMContentLoaded', () => { new PagefindUI({"element":"#search","showImages":false,"showEmptyFilters":true,"resetStyles":false,"bundlePath":"/pagefind/","baseUrl":"/"}); });</script></head>
+  <body>
+    <nav class="navbar">
+      <a href="/" class="navbar-home">
+        <strong>ProgramingIsTheFuture</strong>
+      </a>
+
+      <ul class="navbar-links">
+        <li>
+          <a href="/">
+            Home
+          </a>
+        </li>
+        <li>
+          <a href="/posts/">
+            Blogs
+          </a>
+        </li>
+        <li>
+          <a href="/about/">
+            About Me
+          </a>
+        </li>
+      </ul>
+
+      <div class="navbar-search">
+        <div id="search"></div>
+      </div>
+    </nav>
+
+    <main class="body-post">
+      <article class="post" data-pagefind-body="">
+  <div class="post-header">
+    <h1 class="post-title">Compilers</h1>
+
+    <nav class="post-tags">
+    
+      <a href="/tags/OCaml/" class="tag">OCaml</a>
+    
+      <a href="/tags/Compilers/" class="tag">Compilers</a>
+    
+    </nav>
+
+    <time class="post-date" datetime="2022-12-09 00:00:00">
+      December 9th, 2022
+    </time>
+  </div>
+
+  <div class="post-body">
+    <h1>Tutorial about building compilers</h1>
+<p>In this tutorial we will use the OCaml programing language
+to build a simple compiler.
+I will try to explain it step by step.</p>
+<p>The compiler is divided in this 4 sections:</p>
+<ol>
+<li>Lex</li>
+<li>Parse</li>
+<li>Type Checker</li>
+<li>Compilation</li>
+</ol>
+<h3>AST</h3>
+<p>Before we go to the good parts,
+we will need to define the syntax of the language
+and how we can represent it in OCaml</p>
+<p>Let's take the Golang syntax.</p>
+<p>Simple go program</p>
+<pre><code class="language-golang hljs language-go"><span class="hljs-comment">// Defining a function</span>
+<span class="hljs-comment">// with 2 params and 1 return</span>
+<span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">add</span><span class="hljs-params">(a <span class="hljs-type">int</span>, b <span class="hljs-type">int</span>)</span></span> <span class="hljs-type">int</span> {
+
+  <span class="hljs-keyword">return</span> a + b
+}
+
+<span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> {
+  <span class="hljs-comment">// one way to define variables</span>
+  <span class="hljs-keyword">var</span> a <span class="hljs-type">int</span> = <span class="hljs-number">10</span> 
+  <span class="hljs-comment">// another way to define variables</span>
+  b := <span class="hljs-number">25</span>
+
+  <span class="hljs-comment">// calling functions</span>
+  add(a, b)
+}
+</code></pre>
+<p>The AST (Abstract syntax tree) is used
+to represent the code inside the language we are
+using to build the compiler.</p>
+<pre><code class="language-ocaml hljs">
+<span class="hljs-keyword">type</span> <span class="hljs-keyword">value</span> =
+  | <span class="hljs-type">VInt</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">int</span>
+
+<span class="hljs-keyword">type</span> <span class="hljs-keyword">val</span> = <span class="hljs-keyword">value</span> option
+
+<span class="hljs-keyword">type</span> typ = <span class="hljs-built_in">string</span> option
+
+<span class="hljs-keyword">type</span> param = <span class="hljs-built_in">string</span> * <span class="hljs-built_in">string</span>
+
+<span class="hljs-keyword">type</span> op =
+  | <span class="hljs-type">Add</span>
+  | <span class="hljs-type">Sub</span>
+
+<span class="hljs-keyword">type</span> stmt =
+  | <span class="hljs-type">Const</span> <span class="hljs-keyword">of</span> <span class="hljs-keyword">value</span>
+  | <span class="hljs-type">Var</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span> * typ * <span class="hljs-keyword">val</span>
+  | <span class="hljs-type">Fun</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span> * (<span class="hljs-built_in">string</span> * <span class="hljs-built_in">string</span>) <span class="hljs-built_in">list</span> * typ * stmt <span class="hljs-built_in">list</span>
+  | <span class="hljs-type">Op</span> <span class="hljs-keyword">of</span> stmt * op * stmt
+  | <span class="hljs-type">Variable</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span>
+  | <span class="hljs-type">Return</span> <span class="hljs-keyword">of</span> expr
+  | <span class="hljs-type">Apply</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span> * expr <span class="hljs-built_in">list</span>
+
+<span class="hljs-keyword">type</span> ast = stmt <span class="hljs-built_in">list</span>
+</code></pre>
+<p>With this ast type we can represent the Golang code.
+Let's try converting the golang code into this AST.</p>
+<p>The first function will be:</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-comment">(* Let's look for the function definition
+  We have a name "add"
+  we have multiple params
+  we have some return type (Void if none)
+  and we have some stmts to execute
+*)</span>
+<span class="hljs-type">Fun</span> (<span class="hljs-string">"add"</span>, [(<span class="hljs-string">"a"</span>, <span class="hljs-built_in">int</span>); (<span class="hljs-string">"b"</span>, <span class="hljs-built_in">int</span>)], <span class="hljs-type">Some</span> (<span class="hljs-built_in">int</span>), 
+  <span class="hljs-type">Return</span> (
+    <span class="hljs-type">Op</span> (
+      <span class="hljs-type">Variable</span> (<span class="hljs-string">"a"</span>), 
+      <span class="hljs-type">Add</span>, 
+      <span class="hljs-type">Variable</span> (<span class="hljs-string">"b"</span>)
+    )
+  )  
+)
+</code></pre>
+<p>Let's jump into the Lexer, we will transform the code into TOKENS
+that we can parse latter</p>
+<h3><em>Lex</em></h3>
+<p>In this part of the compiler, we grab each character/symbol
+and we transform each one into a new Token.</p>
+<p>Example:</p>
+<pre><code class="language-ocaml hljs">  <span class="hljs-keyword">let</span> num = <span class="hljs-number">10</span>;
+</code></pre>
+<pre><code>  In this case, the `let` is a token (we can call it LET), 
+  the `num` is another token (we can call it Name and it stores a value),
+  the `=` is another token (EQUAL), 
+  the number `10` is yet another token 
+  (We can call it INT since there are no decimal values)
+  and finally the `;` that can represent the SEMICOLON token.
+</code></pre>
+
+  </div>
+</article>
+
+<hr>
+
+<nav class="post-navigation">
+  <ul>
+  </ul>
+</nav>
+    </main>
+
+    <footer></footer>
+
+    <!-- Current page: /posts/compilers/ -->
+  
+
+</body></html>
