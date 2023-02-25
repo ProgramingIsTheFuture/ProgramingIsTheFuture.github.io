@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<feed xmlns="http://www.w3.org/2005/Atom">
+	<title>ProgramingIsTheFuture</title>
+	<subtitle>Blogs about some interesting topics</subtitle>
+	<link href="https://example.com/feed.xml" rel="self"/>
+	<link href="https://example.com/"/>
+	
+	<updated>2023-02-25T18:51:25Z</updated>
+	<id>https://example.com/</id>
+	<author>
+		<name>ProgramingIsTheFuture,</name>
+		<email>franciscosantosfcp@hotmail.com,</email>
+	</author>
+	<entry>
+		<title>Go Compiler - Part 2</title>
+		<link href="https://example.com/posts/go-compiler-part2/"/>
+		<updated>2023-02-21T00:00:00Z</updated>
+		<id>https://example.com/posts/go-compiler-part2/</id>
+		<content type="html">&lt;p&gt;This is a continuation from &lt;a href=&quot;./go_compiler_part1.md&quot;&gt;last post&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;After building the &lt;strong&gt;Ast&lt;/strong&gt; what can we do next?
+We can check the types and compile the program.&lt;/p&gt;
+&lt;p&gt;This will be the expected:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;...
+let code_typed =
+  [
+    Func
+      ( &amp;quot;add&amp;quot;,
+        [ (&amp;quot;a&amp;quot;, TInt); (&amp;quot;b&amp;quot;, TInt) ],
+        TInt,
+        [ Return (Op (Var &amp;quot;a&amp;quot;, &amp;quot;+&amp;quot;, Var &amp;quot;b&amp;quot;)) ] );
+    Func
+      ( &amp;quot;main&amp;quot;,
+        [],
+        TVoid,
+        [
+          Let (&amp;quot;a&amp;quot;, Some TInt, Const 10);
+          Let (&amp;quot;b&amp;quot;, Some TInt, Const 25);
+          Let (&amp;quot;_&amp;quot;, Some TInt, Apply (&amp;quot;add&amp;quot;, [ Var &amp;quot;a&amp;quot;; Var &amp;quot;b&amp;quot; ]));
+        ] );
+  ]
+... 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Let&#39;s start by creating the type checker!
+First, let&#39;s create a new file &lt;strong&gt;typechecker.ml&lt;/strong&gt; and define a function that takes our &lt;strong&gt;ast list&lt;/strong&gt;
+and returns another &lt;strong&gt;ast list&lt;/strong&gt; (but this time checked).&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;val check : typ VMap.t -&amp;gt; typ list VMap.t -&amp;gt; stmt list -&amp;gt; stmt list
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;First, let&#39;s use the Map data structure. It works identically to the HashTable in OCaml, but it&#39;s immutable, meaning that when we change the Map.v we need to store it again if we want to persist it. It is good to score the scope of variables. The VMap is the Map implementation we are using, uses a string as a key and stores the typ or typ list value (depending on the context).&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;module VMap = Map.Make (String)
+
+let ctx = VMap.empty
+let fun_ctx = VMap.empty
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This will create a context to store functions (&lt;strong&gt;fun_ctx&lt;/strong&gt;) and another one to store the variables (&lt;strong&gt;ctx&lt;/strong&gt;).&lt;/p&gt;
+&lt;p&gt;Let&#39;s convert the &lt;strong&gt;Ast&lt;/strong&gt; expressions to types.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;let rec typ_of_ex ctx fun_ctx : Ast.expr -&amp;gt; Ast.typ = function
+  | Const _ -&amp;gt; TInt
+  | Op _ -&amp;gt; TInt
+  | Var s -&amp;gt; VMap.find s ctx
+  | Apply (s, exprs) -&amp;gt;
+      let t_l = VMap.find s fun_ctx in
+      let typs = List.map (typ_of_ex ctx fun_ctx) exprs in
+      let rec h t1 t2 =
+        match (t1, t2) with
+        | [], [ t2 ] -&amp;gt; t2
+        | t1 :: tl1, t2 :: tl2 when t1 = t2 -&amp;gt; h tl1 tl2
+        | _ -&amp;gt;
+            failwith &amp;quot;Not the right number of arguments or the type is invalid!&amp;quot;
+      in
+      h typs t_l;;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This function with take any expression and convert it to a type.
+Const and Operators are easy, as we only support ints, for now at least. With variables we have to find them in the context.
+The application is the hardest one, as we have to check the type of each expression and compare the types of each expression with the type required by the function.&lt;/p&gt;
+&lt;p&gt;This is getting the types of the function and the type of the expressions (one by one).&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;	...
+	let t_l = VMap.find s fun_ctx in
+	let typs = List.map (typ_of_ex ctx fun_ctx) exprs in
+	...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This function compare both of the types, and returns the &lt;em&gt;return type&lt;/em&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;	...
+	let rec h t1 t2 =
+		match (t1, t2) with
+		| [], [ t2 ] -&amp;gt; t2
+		| t1 :: tl1, t2 :: tl2 when t1 = t2 -&amp;gt; h tl1 tl2
+		| _ -&amp;gt;
+			failwith &amp;quot;Not the right number of arguments or the type is invalid!&amp;quot;
+		in
+	h typs t_l;;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;We will need a function to check the types:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;let check_types (t1 : Ast.typ option) (t2 : Ast.typ) : Ast.typ =
+  match t1 with
+  | Some t1 -&amp;gt; if t1 = t2 then t1 else failwith &amp;quot;Types should be equal&amp;quot;
+  | None -&amp;gt; t2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And finally, we can implement the &lt;strong&gt;check&lt;/strong&gt; function&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;let rec check (ctx : typ VMap.t) (fun_ctx : typ list VMap.t) :
+    Ast.stmt list -&amp;gt; Ast.stmt list = function
+  | [] -&amp;gt; []
+  | (Return _ as ret) :: tl -&amp;gt; ret :: check ctx fun_ctx tl
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Note: OCaml can infer the types, we could write this as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;let rec check ctx fun_ctx = function
+	...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;First, we handle the empty case, and then the Return statement (we keep it equal).&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;	| Let (n, t_op, e) :: tl -&amp;gt;
+	  let t = typ_of_ex ctx fun_ctx e in
+	  let t = check_types t_op t in
+	  let ctx = VMap.add n t ctx in
+	  Let (n, Some t, e) :: check ctx fun_ctx tl
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In the Let case, we will grab the type from the expression and compare it to the type we wrote in the source code (if any), then we add that variable to the context, we create a new let but this time with a type, and finally we continue iterating.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;	...
+	| Func (n, params, t_op, stmts) :: tl -&amp;gt;
+      let rec stmts_typ (stmts : Ast.stmt list) (acc : Ast.stmt list * typ) =
+        match stmts with
+        | [] -&amp;gt; (fst acc, TVoid)
+        | [ (Return e as ret) ] -&amp;gt;
+            ( (check ctx fun_ctx [ ret ] |&amp;gt; List.hd) :: fst acc,
+              typ_of_ex ctx fun_ctx e )
+        | stmt :: tl -&amp;gt;
+            stmts_typ tl
+              ((check ctx fun_ctx [ stmt ] |&amp;gt; List.hd) :: fst acc, TVoid)
+      in
+      let stmts, t = stmts_typ stmts ([], TVoid) in
+      let stmts = List.rev stmts in
+      let t = check_types (Some t_op) t in
+      let rec mount_t (params : (string * Ast.typ) list) =
+        match params with [] -&amp;gt; [ t ] | (_, t) :: tl -&amp;gt; t :: mount_t tl
+      in
+      let ctx =
+        List.fold_left (fun c (nn, typ) -&amp;gt; VMap.add nn typ c) ctx params
+      in
+      let t_mount = mount_t params in
+      let fun_ctx = VMap.add n t_mount fun_ctx in
+      Func (n, params, t, stmts) :: check ctx fun_ctx tl
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;For the &lt;em&gt;Func&lt;/em&gt; case, first, we try to find the return type from the list of statements that will execute inside the function. After that, we check that type with the return type we wrote on the source code. Then, we add all params names to the variable context, then we group all types (the params type and the return type) into an array to know what to expect when calling the function.
+Finally, we return a new &lt;em&gt;Func&lt;/em&gt; with the correct types.&lt;/p&gt;
+&lt;p&gt;This code is expected to run without any error.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;...
+let () =
+  let lex = Lexing.from_channel (open_in &amp;quot;main.go&amp;quot;) in
+  let typed_code =
+    Parser.code Lexer.token lex
+    |&amp;gt; Typechecker.check Typechecker.ctx Typechecker.fun_ctx
+  in
+  assert (code_typed = typed_code)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Llvm Compilation... To be continued.&lt;/p&gt;</content>
+	</entry>
+	<entry>
+		<title>Go Compiler - Part 1</title>
+		<link href="https://example.com/posts/go-compiler-part1/"/>
+		<updated>2022-12-09T00:00:00Z</updated>
+		<id>https://example.com/posts/go-compiler-part1/</id>
+		<content type="html">&lt;h1&gt;Tutorial about building compilers&lt;/h1&gt;
+&lt;p&gt;In this tutorial we will use the OCaml programing language
+to build a simple compiler.
+This will be a walk-through tutorial.&lt;/p&gt;
+&lt;p&gt;Here we will be building a mini Go compiler.
+The Syntax is the minimum to compile this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-golang&quot;&gt;// Defining a function
+// with 2 params and 1 return
+func add(a int, b int) int {
+  return a + b
+}
+
+func main() {
+  // one way to define variables
+  var a int = 10 
+  // another way to define variables
+  b := 25
+
+  // calling functions
+  add(a, b)
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;We will be using the dune
+build system for OCaml.
+Dune help us to create, build and
+execute large OCaml projects with ease.&lt;/p&gt;
+&lt;p&gt;To create a project using dune we can run the following:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-bash&quot;&gt;dune init project gocompiler
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The dune init is a command that must follow one of these:
+executable; library; project; or test.
+In this case, what we want is to create a project,
+and then we give it the project&#39;s name.&lt;/p&gt;
+&lt;p&gt;After running the command inside your terminal,
+you can enter the folder and see that your project structure looks
+like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;.
+├── bin
+│   ├── dune
+│   └── main.ml
+├── dune-project
+├── gocompiler.opam
+├── lib
+│   └── dune
+└── test
+    ├── dune
+    └── gocompiler.ml
+
+3 directories, 7 files
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;strong&gt;bin&lt;/strong&gt; folder is where we store our executable.&lt;br&gt;
+Personally, I enjoy renaming the &lt;strong&gt;bin&lt;/strong&gt; folder to &lt;strong&gt;src&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;The code inside the &lt;strong&gt;main.ml&lt;/strong&gt; should look like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;let () = print_endline &amp;quot;Hello, World!&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;we can execute our project by running:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-bash&quot;&gt;dune exec gocompiler
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now that we have our project created,
+let&#39;s begin by defining an AST (Abstract Syntax Tree).&lt;/p&gt;
+&lt;p&gt;In OCaml we can use contructors with data to define our AST.
+Let&#39;s create the &lt;strong&gt;ast.ml&lt;/strong&gt; file and write the following.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;type typ =
+  | TInt
+  | TVoid
+
+type expr =
+  (* Can be integers *)
+  | Const of int
+  (* Arithmetic operators: + - * / *)
+  | Op of expr * string * expr
+  (* Variables *)
+  | Var of string
+  (* Apply to the function this expr list *)
+  | Apply of string * expr list
+and stmt =
+  | Return of expr
+  (* Define variables with name, optional typ and a value *)
+  | Let of string * typ option * expr
+  (* Name | Params with name type | Return type | Statements for the body function *)
+  | Func of string * (string * typ) list * typ * stmt list
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;After our AST is defined, we can create
+a simple example to demonstrate how to use it.
+The following OCaml code will represent the previous Golang code.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;let code = 
+  [
+    Func
+      ( &amp;quot;add&amp;quot;,
+        [ (&amp;quot;a&amp;quot;, TInt); (&amp;quot;b&amp;quot;, TInt) ],
+        TInt,
+        [ Return (Op (Var &amp;quot;a&amp;quot;, &amp;quot;+&amp;quot;, Var &amp;quot;b&amp;quot;)) ] );
+    Func
+      ( &amp;quot;main&amp;quot;,
+        [],
+        TVoid,
+        [
+          Let (&amp;quot;a&amp;quot;, Some TInt, Const 10);
+          Let (&amp;quot;b&amp;quot;, None, Const 25);
+          Let (&amp;quot;_&amp;quot;, None, Apply (&amp;quot;add&amp;quot;, [ Var &amp;quot;a&amp;quot;; Var &amp;quot;b&amp;quot; ]));
+        ] );
+  ];;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That is a list of statements, the first element is the &lt;code&gt;add&lt;/code&gt; function
+with all the params with their types, the return type,
+and the body is just a return with the &lt;code&gt;+&lt;/code&gt; operator.
+Lastly, the element is the &lt;code&gt;main&lt;/code&gt; function
+with empty params, the return type, and the statements to execute.&lt;/p&gt;
+&lt;p&gt;Do we have to write this all the time?
+No, we will write a parser and lexer.
+Both working together, they will transform all the text
+into tokens and then parse them into those OCaml expressions.&lt;/p&gt;
+&lt;p&gt;At this stage, we need to create the tokens we want to parse and lex.&lt;/p&gt;
+&lt;p&gt;We need to add the menhir module. Edit your dune-project file and add the follow.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-lisp&quot;&gt;(lang dune 3.5)
+
+(name gocompiler)
+
+(using menhir 2.1) ; new line
+
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Note: Just one line added&lt;/p&gt;
+&lt;p&gt;Inside the &lt;strong&gt;dune&lt;/strong&gt; file, let&#39;s add this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-lisp&quot;&gt;...
+
+(ocamllex
+ (modules lexer))
+
+(menhir
+ (modules parser))
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That code tells that the module Parser and Lexer
+are generated by ocamllex and menhir.&lt;/p&gt;
+&lt;p&gt;Create a file named &lt;strong&gt;parser.mly&lt;/strong&gt;.
+Note: the file name is the same as the one specified  dune file.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;%token LET FUNC
+%token RETURN
+%token &amp;lt;string&amp;gt; NAME
+%token &amp;lt;int&amp;gt; VALUE
+%token ADD EQUAL
+%token LBRACE RBRACE
+%token LPARENT RPARENT
+%token COMMA
+%token EOF
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;These tokens are a representation of the individual chars
+from the source code.
+The &lt;code&gt;NAME&lt;/code&gt; and &lt;code&gt;VALUE&lt;/code&gt; tokens can store a value of string and int respectively.&lt;/p&gt;
+&lt;p&gt;And now create a new file named &lt;strong&gt;lexer.mll&lt;/strong&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;{
+  open Parser
+}
+
+rule token = parse
+  | [&#39;\n&#39; &#39; &#39; &#39;\t&#39;] { token lexbuf }
+  | &#39;+&#39; { ADD }
+  | &#39;=&#39; { EQUAL }
+  | &#39;{&#39; { LBRACE }
+  | &#39;}&#39; { RBRACE }
+  | &#39;(&#39; { LPARENT }
+  | &#39;)&#39; { RPARENT }
+  | &#39;,&#39; { COMMA }
+  | &amp;quot;return&amp;quot; { RETURN }
+  | &amp;quot;var&amp;quot; { LET }
+  | &amp;quot;func&amp;quot; { FUNC }
+  | [&#39;0&#39;-&#39;9&#39;]+ as s { VALUE (int_of_string s) }
+  | [&#39;A&#39;-&#39;Z&#39; &#39;a&#39;-&#39;z&#39;]+ as name
+    { NAME name }
+  | eof { EOF }
+  | _ as c { failwith (Format.sprintf &amp;quot;Char %c is invalid&amp;quot; c) }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;strong&gt;lexer.mll&lt;/strong&gt; file is trying to convert each char from the source code
+to the respective token (if possible).
+First, we open the Parser module (created previously) to get access
+to all these tokens.
+The rule is ignoring all white spaces, end of lines, and tabs.
+It&#39;s parsing all chars to its tokens and checks for the EOF.
+If some char does not match any of these conditions then it&#39;s an invalid one.&lt;/p&gt;
+&lt;p&gt;The brackets are a way to say &amp;quot;can match with any one of the lists&amp;quot;.
+Example: &lt;code&gt;[&#39;A&#39;-&#39;Z&#39; &#39;a&#39;-&#39;z&#39;]+&lt;/code&gt; is just
+matching for any sequence of letters from A to Z or a to z.&lt;/p&gt;
+&lt;p&gt;Back to &lt;strong&gt;parser.mly&lt;/strong&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;%{
+  open Ast
+%}
+
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Open the AST module to get access to out AST.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;...
+
+%start code
+
+%type &amp;lt;stmt list&amp;gt; code
+
+%%
+
+param:
+  | n = NAME t = NAME { n, (typ_of_str t) }
+
+params:
+  | LPARENT RPARENT { [] }
+  | LPARENT p = separated_nonempty_list(COMMA, param) RPARENT 
+    { p }
+
+op:
+  | v1 = expr ADD v2 = expr { Op (v1, &amp;quot;+&amp;quot;, v2) }
+
+apply:
+  | n = NAME LPARENT e = separated_nonempty_list(COMMA, expr) RPARENT
+    { 
+      Apply (n, e)
+    } 
+
+expr:
+  | LPARENT e = expr RPARENT { e }
+  | v = VALUE { Const v }
+  | n = NAME { Var n }
+  | o = op { o }
+  | a = apply { a }
+
+stmt:
+  | RETURN e = expr { Return e }
+  | LET n = NAME EQUAL e = expr { Let (n, None, e) }
+  | LET n = NAME t = NAME EQUAL e = expr 
+    {
+      let t = typ_of_str t in
+      Let (n, Some t, e)
+    }
+  | FUNC n = NAME p = params t = NAME? LBRACE s = list(stmt) RBRACE 
+    { 
+      let t = match t with | Some t -&amp;gt; typ_of_str t | None -&amp;gt; TVoid in
+      Func (n, p, t, s) 
+    }
+  | e = expr {Let (&amp;quot;_&amp;quot;, None, e)}
+
+code: s = list(stmt) EOF { s } 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;WOW, this is a lot of code!
+The first two lines set the entry point and the type of its return.&lt;/p&gt;
+&lt;p&gt;Try and read it from bottom to top, and do it like this:
+Starting in &lt;code&gt;code&lt;/code&gt;, we can read as
+&amp;quot;list of stmt followed by EOF we just return the list of stmt&amp;quot;.&lt;/p&gt;
+&lt;p&gt;Example of how to read stmt:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;| LET n = NAME t = NAME EQUAL e = expr 
+  {
+    let t = typ_of_str t in
+    Let (n, Some t, e)
+  }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;If we have the LET token followed by a NAME with any that is being named &amp;quot;n&amp;quot; value followed by
+type that is just another NAME,
+followed by the equal sign and then any expression of type t.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The &lt;code&gt;stmt&lt;/code&gt; match for all the stmt in our AST,
+inside &lt;code&gt;stmt&lt;/code&gt;, the FUNC has some parameters,
+and the way it checks for those is by looking for a
+list separated by a comma.
+Note: &lt;code&gt;stmt&lt;/code&gt; and &lt;code&gt;expr&lt;/code&gt; are recursive.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;stmt:
+  ...
+  | a = apply {Let (&amp;quot;_&amp;quot;, None, a)}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Is just a way to accept any expr as stmt.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;expr&lt;/code&gt; is doing the same as stmt but for expr.&lt;/p&gt;
+&lt;p&gt;Let&#39;s start using the modules we just created.
+Inside the &lt;strong&gt;main.ml&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;open Ast 
+
+let code = 
+  [
+    Func
+      ( &amp;quot;add&amp;quot;,
+        [ (&amp;quot;a&amp;quot;, TInt); (&amp;quot;b&amp;quot;, TInt) ],
+        TInt,
+        [ Return (Op (Var &amp;quot;a&amp;quot;, &amp;quot;+&amp;quot;, Var &amp;quot;b&amp;quot;)) ] );
+    Func
+      ( &amp;quot;main&amp;quot;,
+        [],
+        TVoid,
+        [
+          Let (&amp;quot;a&amp;quot;, Some TInt, Const 10);
+          Let (&amp;quot;b&amp;quot;, None, Const 25);
+          Let (&amp;quot;_&amp;quot;, None, Apply (&amp;quot;add&amp;quot;, [ Var &amp;quot;a&amp;quot;; Var &amp;quot;b&amp;quot; ]));
+        ] );
+  ];;
+
+let _ =
+  let source_code = 
+&amp;quot;func add(a int, b int) int {
+  return a + b
+}
+
+func main() {
+  var a int = 10 
+  var b = 25
+
+  add(a, b)
+}&amp;quot;
+  in
+  let lex = Lexing.from_string source_code in
+  assert (code = (Parser.code Lexer.token lex));;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Accordingly, the code we just wrote parses and lexes the Golang code,
+as a result, is returning the list of tokens we expected!&lt;/p&gt;
+&lt;p&gt;However, we want to parse a file and not hardcoded text.
+Let&#39;s write code to parse the main.go file.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-ocaml&quot;&gt;let () = 
+  let lex = Lexing.from_channel (open_in &amp;quot;main.go&amp;quot;) in
+  let code_from_source = Parser.code Lexer.token lex in
+  assert (code = code_from_source)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;strong&gt;open_in&lt;/strong&gt; is a OCaml function to open a file with the given name (string).
+Then we use the &lt;strong&gt;Parser.code&lt;/strong&gt; to parser the text comming from the &lt;strong&gt;in_channel&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Suggestion: Build a CLI that receives the file name or just defaults it.
+Just like the &lt;strong&gt;go&lt;/strong&gt; cli works.&lt;/p&gt;</content>
+	</entry>
+</feed>

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go Compiler - Part 1</title>
+    <meta name="description" content="Building a simple golang compiler">
+    <link rel="stylesheet" href="/pagefind/pagefind-ui.css"><link rel="stylesheet" href="/styles.css">
+    <link rel="alternate" href="/feed.xml" type="application/atom+xml" title="ProgramingIsTheFuture">
+    <link rel="alternate" href="/feed.json" type="application/json" title="ProgramingIsTheFuture">
+  <script type="text/javascript" src="/pagefind/pagefind-ui.js"></script><script type="text/javascript">window.addEventListener('DOMContentLoaded', () => { new PagefindUI({"element":"#search","showImages":false,"showEmptyFilters":true,"resetStyles":false,"bundlePath":"/pagefind/","baseUrl":"/"}); });</script></head>
+  <body>
+    <nav class="navbar">
+      <a href="/" class="navbar-home">
+        <strong>ProgramingIsTheFuture</strong>
+      </a>
+
+      <ul class="navbar-links">
+        <li>
+          <a href="/">
+            Home
+          </a>
+        </li>
+        <li>
+          <a href="/posts/">
+            Blogs
+          </a>
+        </li>
+        <li>
+          <a href="/about/">
+            About Me
+          </a>
+        </li>
+      </ul>
+
+      <div class="navbar-search">
+        <div id="search"></div>
+      </div>
+    </nav>
+
+    <main class="body-post">
+      <article class="post" data-pagefind-body="">
+  <div class="post-header">
+    <h1 class="post-title">Go Compiler - Part 1</h1>
+
+    <nav class="post-tags">
+    
+      <a href="/tags/OCaml/" class="tag">OCaml</a>
+    
+      <a href="/tags/Compilers/" class="tag">Compilers</a>
+    
+      <a href="/tags/Parser/" class="tag">Parser</a>
+    
+    </nav>
+
+    <time class="post-date" datetime="2022-12-09 00:00:00">
+      December 9th, 2022
+    </time>
+  </div>
+
+  <div class="post-body">
+    <h1>Tutorial about building compilers</h1>
+<p>In this tutorial we will use the OCaml programing language
+to build a simple compiler.
+This will be a walk-through tutorial.</p>
+<p>Here we will be building a mini Go compiler.
+The Syntax is the minimum to compile this:</p>
+<pre><code class="language-golang hljs language-go"><span class="hljs-comment">// Defining a function</span>
+<span class="hljs-comment">// with 2 params and 1 return</span>
+<span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">add</span><span class="hljs-params">(a <span class="hljs-type">int</span>, b <span class="hljs-type">int</span>)</span></span> <span class="hljs-type">int</span> {
+  <span class="hljs-keyword">return</span> a + b
+}
+
+<span class="hljs-function"><span class="hljs-keyword">func</span> <span class="hljs-title">main</span><span class="hljs-params">()</span></span> {
+  <span class="hljs-comment">// one way to define variables</span>
+  <span class="hljs-keyword">var</span> a <span class="hljs-type">int</span> = <span class="hljs-number">10</span> 
+  <span class="hljs-comment">// another way to define variables</span>
+  b := <span class="hljs-number">25</span>
+
+  <span class="hljs-comment">// calling functions</span>
+  add(a, b)
+}
+</code></pre>
+<p>We will be using the dune
+build system for OCaml.
+Dune help us to create, build and
+execute large OCaml projects with ease.</p>
+<p>To create a project using dune we can run the following:</p>
+<pre><code class="language-bash hljs">dune init project gocompiler
+</code></pre>
+<p>The dune init is a command that must follow one of these:
+executable; library; project; or test.
+In this case, what we want is to create a project,
+and then we give it the project's name.</p>
+<p>After running the command inside your terminal,
+you can enter the folder and see that your project structure looks
+like this:</p>
+<pre><code class="language-ocaml hljs">.
+├── bin
+│&nbsp;&nbsp; ├── dune
+│&nbsp;&nbsp; └── main.ml
+├── dune-project
+├── gocompiler.opam
+├── lib
+│&nbsp;&nbsp; └── dune
+└── test
+    ├── dune
+    └── gocompiler.ml
+
+<span class="hljs-number">3</span> directories, <span class="hljs-number">7</span> files
+</code></pre>
+<p>The <strong>bin</strong> folder is where we store our executable.<br>
+Personally, I enjoy renaming the <strong>bin</strong> folder to <strong>src</strong>.</p>
+<p>The code inside the <strong>main.ml</strong> should look like this:</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">let</span> <span class="hljs-literal">()</span> = print_endline <span class="hljs-string">"Hello, World!"</span>
+</code></pre>
+<p>we can execute our project by running:</p>
+<pre><code class="language-bash hljs">dune <span class="hljs-built_in">exec</span> gocompiler
+</code></pre>
+<p>Now that we have our project created,
+let's begin by defining an AST (Abstract Syntax Tree).</p>
+<p>In OCaml we can use contructors with data to define our AST.
+Let's create the <strong>ast.ml</strong> file and write the following.</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">type</span> typ =
+  | <span class="hljs-type">TInt</span>
+  | <span class="hljs-type">TVoid</span>
+
+<span class="hljs-keyword">type</span> expr =
+  <span class="hljs-comment">(* Can be integers *)</span>
+  | <span class="hljs-type">Const</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">int</span>
+  <span class="hljs-comment">(* Arithmetic operators: + - * / *)</span>
+  | <span class="hljs-type">Op</span> <span class="hljs-keyword">of</span> expr * <span class="hljs-built_in">string</span> * expr
+  <span class="hljs-comment">(* Variables *)</span>
+  | <span class="hljs-type">Var</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span>
+  <span class="hljs-comment">(* Apply to the function this expr list *)</span>
+  | <span class="hljs-type">Apply</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span> * expr <span class="hljs-built_in">list</span>
+<span class="hljs-keyword">and</span> stmt =
+  | <span class="hljs-type">Return</span> <span class="hljs-keyword">of</span> expr
+  <span class="hljs-comment">(* Define variables with name, optional typ and a value *)</span>
+  | <span class="hljs-type">Let</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span> * typ option * expr
+  <span class="hljs-comment">(* Name | Params with name type | Return type | Statements for the body function *)</span>
+  | <span class="hljs-type">Func</span> <span class="hljs-keyword">of</span> <span class="hljs-built_in">string</span> * (<span class="hljs-built_in">string</span> * typ) <span class="hljs-built_in">list</span> * typ * stmt <span class="hljs-built_in">list</span>
+</code></pre>
+<p>After our AST is defined, we can create
+a simple example to demonstrate how to use it.
+The following OCaml code will represent the previous Golang code.</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">let</span> code = 
+  [
+    <span class="hljs-type">Func</span>
+      ( <span class="hljs-string">"add"</span>,
+        [ (<span class="hljs-string">"a"</span>, <span class="hljs-type">TInt</span>); (<span class="hljs-string">"b"</span>, <span class="hljs-type">TInt</span>) ],
+        <span class="hljs-type">TInt</span>,
+        [ <span class="hljs-type">Return</span> (<span class="hljs-type">Op</span> (<span class="hljs-type">Var</span> <span class="hljs-string">"a"</span>, <span class="hljs-string">"+"</span>, <span class="hljs-type">Var</span> <span class="hljs-string">"b"</span>)) ] );
+    <span class="hljs-type">Func</span>
+      ( <span class="hljs-string">"main"</span>,
+        <span class="hljs-literal">[]</span>,
+        <span class="hljs-type">TVoid</span>,
+        [
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"a"</span>, <span class="hljs-type">Some</span> <span class="hljs-type">TInt</span>, <span class="hljs-type">Const</span> <span class="hljs-number">10</span>);
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"b"</span>, <span class="hljs-type">None</span>, <span class="hljs-type">Const</span> <span class="hljs-number">25</span>);
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"_"</span>, <span class="hljs-type">None</span>, <span class="hljs-type">Apply</span> (<span class="hljs-string">"add"</span>, [ <span class="hljs-type">Var</span> <span class="hljs-string">"a"</span>; <span class="hljs-type">Var</span> <span class="hljs-string">"b"</span> ]));
+        ] );
+  ];;
+</code></pre>
+<p>That is a list of statements, the first element is the <code>add</code> function
+with all the params with their types, the return type,
+and the body is just a return with the <code>+</code> operator.
+Lastly, the element is the <code>main</code> function
+with empty params, the return type, and the statements to execute.</p>
+<p>Do we have to write this all the time?
+No, we will write a parser and lexer.
+Both working together, they will transform all the text
+into tokens and then parse them into those OCaml expressions.</p>
+<p>At this stage, we need to create the tokens we want to parse and lex.</p>
+<p>We need to add the menhir module. Edit your dune-project file and add the follow.</p>
+<pre><code class="language-lisp hljs">(<span class="hljs-name">lang</span> dune <span class="hljs-number">3.5</span>)
+
+(<span class="hljs-name">name</span> gocompiler)
+
+(<span class="hljs-name">using</span> menhir <span class="hljs-number">2.1</span>) <span class="hljs-comment">; new line</span>
+
+...
+</code></pre>
+<p>Note: Just one line added</p>
+<p>Inside the <strong>dune</strong> file, let's add this:</p>
+<pre><code class="language-lisp hljs">...
+
+(<span class="hljs-name">ocamllex</span>
+ (<span class="hljs-name">modules</span> lexer))
+
+(<span class="hljs-name">menhir</span>
+ (<span class="hljs-name">modules</span> parser))
+</code></pre>
+<p>That code tells that the module Parser and Lexer
+are generated by ocamllex and menhir.</p>
+<p>Create a file named <strong>parser.mly</strong>.
+Note: the file name is the same as the one specified  dune file.</p>
+<pre><code class="language-ocaml hljs">%token <span class="hljs-type">LET</span> <span class="hljs-type">FUNC</span>
+%token <span class="hljs-type">RETURN</span>
+%token &lt;<span class="hljs-built_in">string</span>&gt; <span class="hljs-type">NAME</span>
+%token &lt;<span class="hljs-built_in">int</span>&gt; <span class="hljs-type">VALUE</span>
+%token <span class="hljs-type">ADD</span> <span class="hljs-type">EQUAL</span>
+%token <span class="hljs-type">LBRACE</span> <span class="hljs-type">RBRACE</span>
+%token <span class="hljs-type">LPARENT</span> <span class="hljs-type">RPARENT</span>
+%token <span class="hljs-type">COMMA</span>
+%token <span class="hljs-type">EOF</span>
+</code></pre>
+<p>These tokens are a representation of the individual chars
+from the source code.
+The <code>NAME</code> and <code>VALUE</code> tokens can store a value of string and int respectively.</p>
+<p>And now create a new file named <strong>lexer.mll</strong>.</p>
+<pre><code class="language-ocaml hljs">{
+  <span class="hljs-keyword">open</span> <span class="hljs-type">Parser</span>
+}
+
+rule token = parse
+  | [<span class="hljs-string">'\n'</span> <span class="hljs-string">' '</span> <span class="hljs-string">'\t'</span>] { token lexbuf }
+  | <span class="hljs-string">'+'</span> { <span class="hljs-type">ADD</span> }
+  | <span class="hljs-string">'='</span> { <span class="hljs-type">EQUAL</span> }
+  | <span class="hljs-string">'{'</span> { <span class="hljs-type">LBRACE</span> }
+  | <span class="hljs-string">'}'</span> { <span class="hljs-type">RBRACE</span> }
+  | <span class="hljs-string">'('</span> { <span class="hljs-type">LPARENT</span> }
+  | <span class="hljs-string">')'</span> { <span class="hljs-type">RPARENT</span> }
+  | <span class="hljs-string">','</span> { <span class="hljs-type">COMMA</span> }
+  | <span class="hljs-string">"return"</span> { <span class="hljs-type">RETURN</span> }
+  | <span class="hljs-string">"var"</span> { <span class="hljs-type">LET</span> }
+  | <span class="hljs-string">"func"</span> { <span class="hljs-type">FUNC</span> }
+  | [<span class="hljs-string">'0'</span>-<span class="hljs-string">'9'</span>]+ <span class="hljs-keyword">as</span> s { <span class="hljs-type">VALUE</span> (int_of_string s) }
+  | [<span class="hljs-string">'A'</span>-<span class="hljs-string">'Z'</span> <span class="hljs-string">'a'</span>-<span class="hljs-string">'z'</span>]+ <span class="hljs-keyword">as</span> name
+    { <span class="hljs-type">NAME</span> name }
+  | eof { <span class="hljs-type">EOF</span> }
+  | _ <span class="hljs-keyword">as</span> c { failwith (<span class="hljs-type">Format</span>.sprintf <span class="hljs-string">"Char %c is invalid"</span> c) }
+</code></pre>
+<p>The <strong>lexer.mll</strong> file is trying to convert each char from the source code
+to the respective token (if possible).
+First, we open the Parser module (created previously) to get access
+to all these tokens.
+The rule is ignoring all white spaces, end of lines, and tabs.
+It's parsing all chars to its tokens and checks for the EOF.
+If some char does not match any of these conditions then it's an invalid one.</p>
+<p>The brackets are a way to say "can match with any one of the lists".
+Example: <code>['A'-'Z' 'a'-'z']+</code> is just
+matching for any sequence of letters from A to Z or a to z.</p>
+<p>Back to <strong>parser.mly</strong>.</p>
+<pre><code class="language-ocaml hljs">%{
+  <span class="hljs-keyword">open</span> <span class="hljs-type">Ast</span>
+%}
+
+...
+</code></pre>
+<p>Open the AST module to get access to out AST.</p>
+<pre><code class="language-ocaml hljs">...
+
+%start code
+
+%<span class="hljs-keyword">type</span> &lt;stmt <span class="hljs-built_in">list</span>&gt; code
+
+%%
+
+param:
+  | n = <span class="hljs-type">NAME</span> t = <span class="hljs-type">NAME</span> { n, (typ_of_str t) }
+
+params:
+  | <span class="hljs-type">LPARENT</span> <span class="hljs-type">RPARENT</span> { <span class="hljs-literal">[]</span> }
+  | <span class="hljs-type">LPARENT</span> p = separated_nonempty_list(<span class="hljs-type">COMMA</span>, param) <span class="hljs-type">RPARENT</span> 
+    { p }
+
+op:
+  | v1 = expr <span class="hljs-type">ADD</span> v2 = expr { <span class="hljs-type">Op</span> (v1, <span class="hljs-string">"+"</span>, v2) }
+
+apply:
+  | n = <span class="hljs-type">NAME</span> <span class="hljs-type">LPARENT</span> e = separated_nonempty_list(<span class="hljs-type">COMMA</span>, expr) <span class="hljs-type">RPARENT</span>
+    { 
+      <span class="hljs-type">Apply</span> (n, e)
+    } 
+
+expr:
+  | <span class="hljs-type">LPARENT</span> e = expr <span class="hljs-type">RPARENT</span> { e }
+  | v = <span class="hljs-type">VALUE</span> { <span class="hljs-type">Const</span> v }
+  | n = <span class="hljs-type">NAME</span> { <span class="hljs-type">Var</span> n }
+  | o = op { o }
+  | a = apply { a }
+
+stmt:
+  | <span class="hljs-type">RETURN</span> e = expr { <span class="hljs-type">Return</span> e }
+  | <span class="hljs-type">LET</span> n = <span class="hljs-type">NAME</span> <span class="hljs-type">EQUAL</span> e = expr { <span class="hljs-type">Let</span> (n, <span class="hljs-type">None</span>, e) }
+  | <span class="hljs-type">LET</span> n = <span class="hljs-type">NAME</span> t = <span class="hljs-type">NAME</span> <span class="hljs-type">EQUAL</span> e = expr 
+    {
+      <span class="hljs-keyword">let</span> t = typ_of_str t <span class="hljs-keyword">in</span>
+      <span class="hljs-type">Let</span> (n, <span class="hljs-type">Some</span> t, e)
+    }
+  | <span class="hljs-type">FUNC</span> n = <span class="hljs-type">NAME</span> p = params t = <span class="hljs-type">NAME</span>? <span class="hljs-type">LBRACE</span> s = <span class="hljs-built_in">list</span>(stmt) <span class="hljs-type">RBRACE</span> 
+    { 
+      <span class="hljs-keyword">let</span> t = <span class="hljs-keyword">match</span> t <span class="hljs-keyword">with</span> | <span class="hljs-type">Some</span> t -&gt; typ_of_str t | <span class="hljs-type">None</span> -&gt; <span class="hljs-type">TVoid</span> <span class="hljs-keyword">in</span>
+      <span class="hljs-type">Func</span> (n, p, t, s) 
+    }
+  | e = expr {<span class="hljs-type">Let</span> (<span class="hljs-string">"_"</span>, <span class="hljs-type">None</span>, e)}
+
+code: s = <span class="hljs-built_in">list</span>(stmt) <span class="hljs-type">EOF</span> { s } 
+</code></pre>
+<p>WOW, this is a lot of code!
+The first two lines set the entry point and the type of its return.</p>
+<p>Try and read it from bottom to top, and do it like this:
+Starting in <code>code</code>, we can read as
+"list of stmt followed by EOF we just return the list of stmt".</p>
+<p>Example of how to read stmt:</p>
+<pre><code class="language-ocaml hljs">| <span class="hljs-type">LET</span> n = <span class="hljs-type">NAME</span> t = <span class="hljs-type">NAME</span> <span class="hljs-type">EQUAL</span> e = expr 
+  {
+    <span class="hljs-keyword">let</span> t = typ_of_str t <span class="hljs-keyword">in</span>
+    <span class="hljs-type">Let</span> (n, <span class="hljs-type">Some</span> t, e)
+  }
+</code></pre>
+<ul>
+<li>If we have the LET token followed by a NAME with any that is being named "n" value followed by
+type that is just another NAME,
+followed by the equal sign and then any expression of type t.</li>
+</ul>
+<p>The <code>stmt</code> match for all the stmt in our AST,
+inside <code>stmt</code>, the FUNC has some parameters,
+and the way it checks for those is by looking for a
+list separated by a comma.
+Note: <code>stmt</code> and <code>expr</code> are recursive.</p>
+<pre><code class="language-ocaml hljs">stmt:
+  ...
+  | a = apply {<span class="hljs-type">Let</span> (<span class="hljs-string">"_"</span>, <span class="hljs-type">None</span>, a)}
+</code></pre>
+<p>Is just a way to accept any expr as stmt.</p>
+<p>The <code>expr</code> is doing the same as stmt but for expr.</p>
+<p>Let's start using the modules we just created.
+Inside the <strong>main.ml</strong></p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">open</span> <span class="hljs-type">Ast</span> 
+
+<span class="hljs-keyword">let</span> code = 
+  [
+    <span class="hljs-type">Func</span>
+      ( <span class="hljs-string">"add"</span>,
+        [ (<span class="hljs-string">"a"</span>, <span class="hljs-type">TInt</span>); (<span class="hljs-string">"b"</span>, <span class="hljs-type">TInt</span>) ],
+        <span class="hljs-type">TInt</span>,
+        [ <span class="hljs-type">Return</span> (<span class="hljs-type">Op</span> (<span class="hljs-type">Var</span> <span class="hljs-string">"a"</span>, <span class="hljs-string">"+"</span>, <span class="hljs-type">Var</span> <span class="hljs-string">"b"</span>)) ] );
+    <span class="hljs-type">Func</span>
+      ( <span class="hljs-string">"main"</span>,
+        <span class="hljs-literal">[]</span>,
+        <span class="hljs-type">TVoid</span>,
+        [
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"a"</span>, <span class="hljs-type">Some</span> <span class="hljs-type">TInt</span>, <span class="hljs-type">Const</span> <span class="hljs-number">10</span>);
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"b"</span>, <span class="hljs-type">None</span>, <span class="hljs-type">Const</span> <span class="hljs-number">25</span>);
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"_"</span>, <span class="hljs-type">None</span>, <span class="hljs-type">Apply</span> (<span class="hljs-string">"add"</span>, [ <span class="hljs-type">Var</span> <span class="hljs-string">"a"</span>; <span class="hljs-type">Var</span> <span class="hljs-string">"b"</span> ]));
+        ] );
+  ];;
+
+<span class="hljs-keyword">let</span> _ =
+  <span class="hljs-keyword">let</span> source_code = 
+<span class="hljs-string">"func add(a int, b int) int {
+  return a + b
+}
+
+func main() {
+  var a int = 10 
+  var b = 25
+
+  add(a, b)
+}"</span>
+  <span class="hljs-keyword">in</span>
+  <span class="hljs-keyword">let</span> lex = <span class="hljs-type">Lexing</span>.from_string source_code <span class="hljs-keyword">in</span>
+  <span class="hljs-keyword">assert</span> (code = (<span class="hljs-type">Parser</span>.code <span class="hljs-type">Lexer</span>.token lex));;
+</code></pre>
+<p>Accordingly, the code we just wrote parses and lexes the Golang code,
+as a result, is returning the list of tokens we expected!</p>
+<p>However, we want to parse a file and not hardcoded text.
+Let's write code to parse the main.go file.</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">let</span> <span class="hljs-literal">()</span> = 
+  <span class="hljs-keyword">let</span> lex = <span class="hljs-type">Lexing</span>.from_channel (open_in <span class="hljs-string">"main.go"</span>) <span class="hljs-keyword">in</span>
+  <span class="hljs-keyword">let</span> code_from_source = <span class="hljs-type">Parser</span>.code <span class="hljs-type">Lexer</span>.token lex <span class="hljs-keyword">in</span>
+  <span class="hljs-keyword">assert</span> (code = code_from_source)
+</code></pre>
+<p>The <strong>open_in</strong> is a OCaml function to open a file with the given name (string).
+Then we use the <strong>Parser.code</strong> to parser the text comming from the <strong>in_channel</strong>.</p>
+<p>Suggestion: Build a CLI that receives the file name or just defaults it.
+Just like the <strong>go</strong> cli works.</p>
+
+  </div>
+</article>
+
+<hr>
+
+<nav class="post-navigation">
+  <ul>
+    <li>
+      <strong>Next: <a href="/posts/go-compiler-part2/" rel="next">Go Compiler - Part 2</a> →</strong>
+    </li>
+    
+  </ul>
+</nav>
+    </main>
+
+    <footer></footer>
+
+    <!-- Current page: /posts/go-compiler-part1/ -->
+  
+
+</body></html>

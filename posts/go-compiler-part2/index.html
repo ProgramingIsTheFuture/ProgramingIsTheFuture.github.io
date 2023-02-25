@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go Compiler - Part 2</title>
+    <meta name="description" content="Building a simple golang compiler">
+    <link rel="stylesheet" href="/pagefind/pagefind-ui.css"><link rel="stylesheet" href="/styles.css">
+    <link rel="alternate" href="/feed.xml" type="application/atom+xml" title="ProgramingIsTheFuture">
+    <link rel="alternate" href="/feed.json" type="application/json" title="ProgramingIsTheFuture">
+  <script type="text/javascript" src="/pagefind/pagefind-ui.js"></script><script type="text/javascript">window.addEventListener('DOMContentLoaded', () => { new PagefindUI({"element":"#search","showImages":false,"showEmptyFilters":true,"resetStyles":false,"bundlePath":"/pagefind/","baseUrl":"/"}); });</script></head>
+  <body>
+    <nav class="navbar">
+      <a href="/" class="navbar-home">
+        <strong>ProgramingIsTheFuture</strong>
+      </a>
+
+      <ul class="navbar-links">
+        <li>
+          <a href="/">
+            Home
+          </a>
+        </li>
+        <li>
+          <a href="/posts/">
+            Blogs
+          </a>
+        </li>
+        <li>
+          <a href="/about/">
+            About Me
+          </a>
+        </li>
+      </ul>
+
+      <div class="navbar-search">
+        <div id="search"></div>
+      </div>
+    </nav>
+
+    <main class="body-post">
+      <article class="post" data-pagefind-body="">
+  <div class="post-header">
+    <h1 class="post-title">Go Compiler - Part 2</h1>
+
+    <nav class="post-tags">
+    
+      <a href="/tags/OCaml/" class="tag">OCaml</a>
+    
+      <a href="/tags/Compilers/" class="tag">Compilers</a>
+    
+      <a href="/tags/Llvm/" class="tag">Llvm</a>
+    
+      <a href="/tags/Type System/" class="tag">Type System</a>
+    
+    </nav>
+
+    <time class="post-date" datetime="2023-02-21 00:00:00">
+      February 21st, 2023
+    </time>
+  </div>
+
+  <div class="post-body">
+    <p>This is a continuation from <a href="/posts/go-compiler-part1/">last post</a>.</p>
+<p>After building the <strong>Ast</strong> what can we do next?
+We can check the types and compile the program.</p>
+<p>This will be the expected:</p>
+<pre><code class="language-ocaml hljs">...
+<span class="hljs-keyword">let</span> code_typed =
+  [
+    <span class="hljs-type">Func</span>
+      ( <span class="hljs-string">"add"</span>,
+        [ (<span class="hljs-string">"a"</span>, <span class="hljs-type">TInt</span>); (<span class="hljs-string">"b"</span>, <span class="hljs-type">TInt</span>) ],
+        <span class="hljs-type">TInt</span>,
+        [ <span class="hljs-type">Return</span> (<span class="hljs-type">Op</span> (<span class="hljs-type">Var</span> <span class="hljs-string">"a"</span>, <span class="hljs-string">"+"</span>, <span class="hljs-type">Var</span> <span class="hljs-string">"b"</span>)) ] );
+    <span class="hljs-type">Func</span>
+      ( <span class="hljs-string">"main"</span>,
+        <span class="hljs-literal">[]</span>,
+        <span class="hljs-type">TVoid</span>,
+        [
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"a"</span>, <span class="hljs-type">Some</span> <span class="hljs-type">TInt</span>, <span class="hljs-type">Const</span> <span class="hljs-number">10</span>);
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"b"</span>, <span class="hljs-type">Some</span> <span class="hljs-type">TInt</span>, <span class="hljs-type">Const</span> <span class="hljs-number">25</span>);
+          <span class="hljs-type">Let</span> (<span class="hljs-string">"_"</span>, <span class="hljs-type">Some</span> <span class="hljs-type">TInt</span>, <span class="hljs-type">Apply</span> (<span class="hljs-string">"add"</span>, [ <span class="hljs-type">Var</span> <span class="hljs-string">"a"</span>; <span class="hljs-type">Var</span> <span class="hljs-string">"b"</span> ]));
+        ] );
+  ]
+... 
+</code></pre>
+<p>Let's start by creating the type checker!
+First, let's create a new file <strong>typechecker.ml</strong> and define a function that takes our <strong>ast list</strong>
+and returns another <strong>ast list</strong> (but this time checked).</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">val</span> check : typ <span class="hljs-type">VMap</span>.t -&gt; typ <span class="hljs-built_in">list</span> <span class="hljs-type">VMap</span>.t -&gt; stmt <span class="hljs-built_in">list</span> -&gt; stmt <span class="hljs-built_in">list</span>
+</code></pre>
+<p>First, let's use the Map data structure. It works identically to the HashTable in OCaml, but it's immutable, meaning that when we change the Map.v we need to store it again if we want to persist it. It is good to score the scope of variables. The VMap is the Map implementation we are using, uses a string as a key and stores the typ or typ list value (depending on the context).</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">module</span> <span class="hljs-type">VMap</span> = <span class="hljs-type">Map</span>.<span class="hljs-type">Make</span> (<span class="hljs-type">String</span>)
+
+<span class="hljs-keyword">let</span> ctx = <span class="hljs-type">VMap</span>.empty
+<span class="hljs-keyword">let</span> fun_ctx = <span class="hljs-type">VMap</span>.empty
+</code></pre>
+<p>This will create a context to store functions (<strong>fun_ctx</strong>) and another one to store the variables (<strong>ctx</strong>).</p>
+<p>Let's convert the <strong>Ast</strong> expressions to types.</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">let</span> <span class="hljs-keyword">rec</span> typ_of_ex ctx fun_ctx : <span class="hljs-type">Ast</span>.expr -&gt; <span class="hljs-type">Ast</span>.typ = <span class="hljs-keyword">function</span>
+  | <span class="hljs-type">Const</span> _ -&gt; <span class="hljs-type">TInt</span>
+  | <span class="hljs-type">Op</span> _ -&gt; <span class="hljs-type">TInt</span>
+  | <span class="hljs-type">Var</span> s -&gt; <span class="hljs-type">VMap</span>.find s ctx
+  | <span class="hljs-type">Apply</span> (s, exprs) -&gt;
+      <span class="hljs-keyword">let</span> t_l = <span class="hljs-type">VMap</span>.find s fun_ctx <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> typs = <span class="hljs-type">List</span>.map (typ_of_ex ctx fun_ctx) exprs <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> <span class="hljs-keyword">rec</span> h t1 t2 =
+        <span class="hljs-keyword">match</span> (t1, t2) <span class="hljs-keyword">with</span>
+        | <span class="hljs-literal">[]</span>, [ t2 ] -&gt; t2
+        | t1 :: tl1, t2 :: tl2 <span class="hljs-keyword">when</span> t1 = t2 -&gt; h tl1 tl2
+        | _ -&gt;
+            failwith <span class="hljs-string">"Not the right number of arguments or the type is invalid!"</span>
+      <span class="hljs-keyword">in</span>
+      h typs t_l;;
+</code></pre>
+<p>This function with take any expression and convert it to a type.
+Const and Operators are easy, as we only support ints, for now at least. With variables we have to find them in the context.
+The application is the hardest one, as we have to check the type of each expression and compare the types of each expression with the type required by the function.</p>
+<p>This is getting the types of the function and the type of the expressions (one by one).</p>
+<pre><code class="language-ocaml hljs">	...
+	<span class="hljs-keyword">let</span> t_l = <span class="hljs-type">VMap</span>.find s fun_ctx <span class="hljs-keyword">in</span>
+	<span class="hljs-keyword">let</span> typs = <span class="hljs-type">List</span>.map (typ_of_ex ctx fun_ctx) exprs <span class="hljs-keyword">in</span>
+	...
+</code></pre>
+<p>This function compare both of the types, and returns the <em>return type</em>.</p>
+<pre><code class="language-ocaml hljs">	...
+	<span class="hljs-keyword">let</span> <span class="hljs-keyword">rec</span> h t1 t2 =
+		<span class="hljs-keyword">match</span> (t1, t2) <span class="hljs-keyword">with</span>
+		| <span class="hljs-literal">[]</span>, [ t2 ] -&gt; t2
+		| t1 :: tl1, t2 :: tl2 <span class="hljs-keyword">when</span> t1 = t2 -&gt; h tl1 tl2
+		| _ -&gt;
+			failwith <span class="hljs-string">"Not the right number of arguments or the type is invalid!"</span>
+		<span class="hljs-keyword">in</span>
+	h typs t_l;;
+</code></pre>
+<p>We will need a function to check the types:</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">let</span> check_types (t1 : <span class="hljs-type">Ast</span>.typ option) (t2 : <span class="hljs-type">Ast</span>.typ) : <span class="hljs-type">Ast</span>.typ =
+  <span class="hljs-keyword">match</span> t1 <span class="hljs-keyword">with</span>
+  | <span class="hljs-type">Some</span> t1 -&gt; <span class="hljs-keyword">if</span> t1 = t2 <span class="hljs-keyword">then</span> t1 <span class="hljs-keyword">else</span> failwith <span class="hljs-string">"Types should be equal"</span>
+  | <span class="hljs-type">None</span> -&gt; t2
+</code></pre>
+<p>And finally, we can implement the <strong>check</strong> function</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">let</span> <span class="hljs-keyword">rec</span> check (ctx : typ <span class="hljs-type">VMap</span>.t) (fun_ctx : typ <span class="hljs-built_in">list</span> <span class="hljs-type">VMap</span>.t) :
+    <span class="hljs-type">Ast</span>.stmt <span class="hljs-built_in">list</span> -&gt; <span class="hljs-type">Ast</span>.stmt <span class="hljs-built_in">list</span> = <span class="hljs-keyword">function</span>
+  | <span class="hljs-literal">[]</span> -&gt; <span class="hljs-literal">[]</span>
+  | (<span class="hljs-type">Return</span> _ <span class="hljs-keyword">as</span> ret) :: tl -&gt; ret :: check ctx fun_ctx tl
+...
+</code></pre>
+<p>Note: OCaml can infer the types, we could write this as:</p>
+<pre><code class="language-ocaml hljs"><span class="hljs-keyword">let</span> <span class="hljs-keyword">rec</span> check ctx fun_ctx = <span class="hljs-keyword">function</span>
+	...
+</code></pre>
+<p>First, we handle the empty case, and then the Return statement (we keep it equal).</p>
+<pre><code class="language-ocaml hljs">	| <span class="hljs-type">Let</span> (n, t_op, e) :: tl -&gt;
+	  <span class="hljs-keyword">let</span> t = typ_of_ex ctx fun_ctx e <span class="hljs-keyword">in</span>
+	  <span class="hljs-keyword">let</span> t = check_types t_op t <span class="hljs-keyword">in</span>
+	  <span class="hljs-keyword">let</span> ctx = <span class="hljs-type">VMap</span>.add n t ctx <span class="hljs-keyword">in</span>
+	  <span class="hljs-type">Let</span> (n, <span class="hljs-type">Some</span> t, e) :: check ctx fun_ctx tl
+</code></pre>
+<p>In the Let case, we will grab the type from the expression and compare it to the type we wrote in the source code (if any), then we add that variable to the context, we create a new let but this time with a type, and finally we continue iterating.</p>
+<pre><code class="language-ocaml hljs">	...
+	| <span class="hljs-type">Func</span> (n, params, t_op, stmts) :: tl -&gt;
+      <span class="hljs-keyword">let</span> <span class="hljs-keyword">rec</span> stmts_typ (stmts : <span class="hljs-type">Ast</span>.stmt <span class="hljs-built_in">list</span>) (acc : <span class="hljs-type">Ast</span>.stmt <span class="hljs-built_in">list</span> * typ) =
+        <span class="hljs-keyword">match</span> stmts <span class="hljs-keyword">with</span>
+        | <span class="hljs-literal">[]</span> -&gt; (fst acc, <span class="hljs-type">TVoid</span>)
+        | [ (<span class="hljs-type">Return</span> e <span class="hljs-keyword">as</span> ret) ] -&gt;
+            ( (check ctx fun_ctx [ ret ] |&gt; <span class="hljs-type">List</span>.hd) :: fst acc,
+              typ_of_ex ctx fun_ctx e )
+        | stmt :: tl -&gt;
+            stmts_typ tl
+              ((check ctx fun_ctx [ stmt ] |&gt; <span class="hljs-type">List</span>.hd) :: fst acc, <span class="hljs-type">TVoid</span>)
+      <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> stmts, t = stmts_typ stmts (<span class="hljs-literal">[]</span>, <span class="hljs-type">TVoid</span>) <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> stmts = <span class="hljs-type">List</span>.rev stmts <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> t = check_types (<span class="hljs-type">Some</span> t_op) t <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> <span class="hljs-keyword">rec</span> mount_t (params : (<span class="hljs-built_in">string</span> * <span class="hljs-type">Ast</span>.typ) <span class="hljs-built_in">list</span>) =
+        <span class="hljs-keyword">match</span> params <span class="hljs-keyword">with</span> <span class="hljs-literal">[]</span> -&gt; [ t ] | (_, t) :: tl -&gt; t :: mount_t tl
+      <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> ctx =
+        <span class="hljs-type">List</span>.fold_left (<span class="hljs-keyword">fun</span> c (nn, typ) -&gt; <span class="hljs-type">VMap</span>.add nn typ c) ctx params
+      <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> t_mount = mount_t params <span class="hljs-keyword">in</span>
+      <span class="hljs-keyword">let</span> fun_ctx = <span class="hljs-type">VMap</span>.add n t_mount fun_ctx <span class="hljs-keyword">in</span>
+      <span class="hljs-type">Func</span> (n, params, t, stmts) :: check ctx fun_ctx tl
+</code></pre>
+<p>For the <em>Func</em> case, first, we try to find the return type from the list of statements that will execute inside the function. After that, we check that type with the return type we wrote on the source code. Then, we add all params names to the variable context, then we group all types (the params type and the return type) into an array to know what to expect when calling the function.
+Finally, we return a new <em>Func</em> with the correct types.</p>
+<p>This code is expected to run without any error.</p>
+<pre><code class="language-ocaml hljs">...
+<span class="hljs-keyword">let</span> <span class="hljs-literal">()</span> =
+  <span class="hljs-keyword">let</span> lex = <span class="hljs-type">Lexing</span>.from_channel (open_in <span class="hljs-string">"main.go"</span>) <span class="hljs-keyword">in</span>
+  <span class="hljs-keyword">let</span> typed_code =
+    <span class="hljs-type">Parser</span>.code <span class="hljs-type">Lexer</span>.token lex
+    |&gt; <span class="hljs-type">Typechecker</span>.check <span class="hljs-type">Typechecker</span>.ctx <span class="hljs-type">Typechecker</span>.fun_ctx
+  <span class="hljs-keyword">in</span>
+  <span class="hljs-keyword">assert</span> (code_typed = typed_code)
+</code></pre>
+<p>Llvm Compilation... To be continued.</p>
+
+  </div>
+</article>
+
+<hr>
+
+<nav class="post-navigation">
+  <ul>
+    <li>
+      ← Previous: <a href="/posts/go-compiler-part1/" rel="prev">Go Compiler - Part 1</a>
+    </li>
+    
+  </ul>
+</nav>
+    </main>
+
+    <footer></footer>
+
+    <!-- Current page: /posts/go-compiler-part2/ -->
+  
+
+</body></html>

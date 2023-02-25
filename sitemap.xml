@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/posts/go-compiler-part1/</loc>
+    <lastmod>2022-12-09</lastmod>
+  </url>
+  <url>
+    <loc>https://example.com/posts/go-compiler-part2/</loc>
+    <lastmod>2023-02-21</lastmod>
+  </url>
+  <url>
+    <loc>https://example.com/about/</loc>
+    <lastmod>2023-02-25</lastmod>
+  </url>
+  <url>
+    <loc>https://example.com/tags/</loc>
+    <lastmod>2023-02-25</lastmod>
+  </url>
+  <url>
+    <loc>https://example.com/</loc>
+    <lastmod>2023-02-25</lastmod>
+  </url>
+  <url>
+    <loc>https://example.com/404.html</loc>
+    <lastmod>2023-02-25</lastmod>
+  </url>
+</urlset>
