@@ -1,0 +1,16 @@
+---
+title: Cumulonimbus
+description: Cumulonimbus - Personal Blog
+url: /
+layout: layouts/main.njk
+---
+
+{% set postslist = search.pages("type=posts", "date=desc", 3) %}
+<section>
+  {% for post in postslist %}
+    <div>
+      <a href="{{ post.data.url }}">{{ post.data.title }}</a>
+      <p>{{ post.data.description }}</p>
+    </div>
+  {% endfor %}
+</section>
