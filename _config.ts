@@ -10,4 +10,6 @@ site.use(date({
   locales: { pt },
 }));
 
+site.copy("assets");
+
 export default site;

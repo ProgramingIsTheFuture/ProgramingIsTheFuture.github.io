@@ -2,6 +2,28 @@
 layout: layouts/main.njk
 ---
 
-{% include "templates/header.njk" %}
+<div class="content">
+  {% include "templates/header.njk" %}
 
-{{ content | safe }}
+  <section class="mx-auto max-w-screen-sm">
+    {{ content | safe }}
+  </section>
+</div>
+
+<style>
+.content {
+  margin-left: 15px;
+  height: 100%;
+  width: 100%;
+}
+
+h1,h2,h3,h4,h5,h6 {
+  margin-block-start: 0.5em;
+  margin-block-end: 0.5em;
+}
+
+p {
+  margin-block-start: 0.4em;
+  margin-block-end: 0.4em;
+}
+</style>

@@ -3,14 +3,89 @@ title: Cumulonimbus
 description: Cumulonimbus - Personal Blog
 url: /
 layout: layouts/main.njk
+img: /assets/profile_pic.jpeg
+name: Cumulonimbus
+author: Margarida Fernandes
+links:
+  - name: Instagram
+    url: https://www.instagram.com/sf.margarida
 ---
 
-{% set postslist = search.pages("type=posts", "date=desc", 3) %}
-<section>
+{% include "templates/header.njk" %}
+
+{% set postslist = search.pages("type=posts", "date=desc") %}
+<section class="post-list max-w-screen-sm post-list mx-auto">
   {% for post in postslist %}
-    <div>
-      <a href="{{ post.data.url }}">{{ post.data.title }}</a>
-      <p>{{ post.data.description }}</p>
+    <div class="post">
+      <a class="no-a" href="{{ post.data.url }}">
+        <h3 class="post-title">{{ post.data.title }}</h3>
+        <p class="post-date">{{ post.data.date | date('dd/MM/yyyy')}}</p>
+        <p class="post-description">{{ post.data.content }}</p>
+        <div class="post-tags">
+          {% for tag in post.data.tags %}
+            {{ request | safe }}
+            {{ request.headers.referer }}
+            {{ request.url }}
+            {{request.GET.param1}}
+            <p>{{ tag }}</p>
+          {% endfor %}
+        </div>
+      </a>
     </div>
   {% endfor %}
 </section>
+
+<style>
+  .post-list {
+    border-top-width: 1px;
+    border-top-style: solid;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-bottom: 3rem;
+  }
+
+  .post {
+    padding-top: 3rem;
+  }
+
+  .post-title {
+    color: var(--main-title-color);
+    margin: 0;
+  }
+
+  .no-a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .post-description {
+    margin: 0;
+    margin-top: 10px;
+  }
+
+  .post-date {
+    margin: 0;
+  }
+</style>
+
+<script>
+
+  const load_description = (el) => {
+    console.log(el)
+    console.log(el.childNodes[1])
+    console.log(el.childNodes[1].childNodes[5]);
+    const descr = el.childNodes[1].childNodes[5];
+    let s = descr.getInnerHTML().split('\n');
+    descr.innerText = s[2];
+    return;
+  }
+
+  let target = document.querySelector('.post-list');
+
+  for(let i = 0; i < target.childNodes.length; i++) {
+    console.log(target.childNodes)
+    if (target.childNodes[i].nodeType !== 3) {
+      load_description(target.childNodes[i])
+    }
+  }
+</script>
