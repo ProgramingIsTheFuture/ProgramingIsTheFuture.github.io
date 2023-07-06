@@ -35,8 +35,21 @@
       color: var(--main-link-color);
     }
 
-    .max-w-screen-sm {
-      max-width: 640px;
+    a,
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @media (max-width: 660px) {
+      .max-w-screen-sm {
+        max-width: 80%;
+      }
+    }
+
+    @media (min-width: 660px) {
+      .max-w-screen-sm {
+        max-width: 640px;
+      }
     }
 
     .mx-auto {

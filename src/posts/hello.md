@@ -2,20 +2,16 @@
 layout: layouts/posts.njk
 url: /posts/hello.html
 title: Hello World
-author: Margarida Fernandes
-date: 2023-07-03
+author: Francisco Santos
+date: 2023-07-06
 tags:
-  - Tag1
+  - Hello World
 ---
 
 
-# Ola!
+# Hello!
 
-Ola, este e o meu primeiro post!
-Ola, este e o meu primeiro post!
-Ola, este e o meu primeiro post!
-Ola, este e o meu primeiro post!
-Ola, este e o meu primeiro post!
-Ola, este e o meu primeiro post!
+Hello, this is my first post!
 
-Boa noite!
+Hello, this is my first post!
+Have a good night!

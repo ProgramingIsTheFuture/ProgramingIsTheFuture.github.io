@@ -1,0 +1,148 @@
+---
+title: ProgramingIsTheFuture
+description: ProgramingIsTheFuture - Personal Blog
+layout: layouts/main.njk
+img: /assets/profile_pic.png
+name: ProgramingIsTheFuture
+author: Francisco Santos
+links:
+  - name: Linkedin
+    icon: <i class="fa-brands fa-linkedin"></i>
+    url: https://www.linkedin.com/in/francisco-santos-7a362a1b2/
+  - name: Github
+    icon: <i class="fa-brands fa-github"></i>
+    url: https://github.com/ProgramingIsTheFuture
+---
+
+{% include "templates/header.njk" %}
+
+{% if results %}
+  {% set postslist = results %}
+{% else %}
+  {% set postslist = search.pages("type=posts", "date=desc") %}
+{% endif %}
+{% if postslist.length >= 1 %}
+<section class="post-list max-w-screen-sm post-list mx-auto">
+  {% for post in postslist %}
+    {{post.url}}
+    {% if tag %}
+      {% if tag in post.data.tags %}
+        <div class="post">
+          <a class="no-a" href="{{ post.data.url }}">
+            <h3 class="post-title">{{ post.data.title }}</h3>
+            <p class="post-date">{{ post.data.date | date('dd/MM/yyyy')}}</p>
+            <p class="post-description">{{ post.data.content }}</p>
+          </a>
+          <div class="post-tags">
+            {% for tag in post.data.tags %}
+              <a href="/tag/{{ tag }}">{{ tag }}</a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="post">
+        <a class="no-a" href="{{ post.data.url }}">
+          <h3 class="post-title">{{ post.data.title }}</h3>
+          <p class="post-date">{{ post.data.date | date('dd/MM/yyyy')}}</p>
+          <p class="post-description">{{ post.data.content }}</p>
+        </a>
+        <div class="post-tags">
+          {% for tag in post.data.tags %}
+            <a href="/tag/{{ tag }}">{{ tag }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+  <div class="pagination-btn">
+    <button onclick="location.href = '{{pagination.previous}}'"><i class="fa-solid fa-right-long fa-2xl" style="transform: rotate(180deg);"></i></button>
+    <button onclick="location.href = '{{pagination.next}}'"><i class="fa-solid fa-right-long fa-2xl"></i></button>
+  </div>
+</section>
+{% endif %}
+
+<style>
+  .pagination-btn {
+    margin-top: 25px;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pagination-btn > button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px;
+    width: 40px;
+    height: 40px;
+    background: var(--main-title-color);
+    cursor: pointer;
+  }
+
+  .pagination-btn > button > i{
+    color: var(--main-bg-color);
+  }
+
+  .post-tags {
+    margin-top: 8px;
+  }
+  .post-tags > a {
+    margin-right: 8px;
+  }
+
+  .post-list {
+    border-top-width: 1px;
+    border-top-style: solid;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-bottom: 3rem;
+  }
+
+  .post {
+    padding-top: 3rem;
+  }
+
+  .post-title {
+    color: var(--main-title-color);
+    margin: 0;
+  }
+
+  .no-a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .post-description {
+    margin: 0;
+    margin-top: 10px;
+  }
+
+  .post-date {
+    margin: 0;
+  }
+</style>
+
+<script>
+
+  const load_description = (el) => {
+    console.log(el)
+    console.log(el.childNodes[1])
+    console.log(el.childNodes[1].childNodes[5]);
+    const descr = el.childNodes[1].childNodes[5];
+    let s = descr.getInnerHTML().split('\n');
+    descr.innerText = s[2];
+    return;
+  }
+
+  let target = document.querySelector('.post-list');
+
+  for(let i = 0; i < target.childNodes.length; i++) {
+    console.log(target.childNodes)
+    if (target.childNodes[i].nodeType !== 3) {
+      load_description(target.childNodes[i])
+    }
+  }
+</script>

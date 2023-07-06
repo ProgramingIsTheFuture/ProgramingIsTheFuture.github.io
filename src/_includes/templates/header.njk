@@ -32,7 +32,7 @@
         {% if links.length >= 1 %}
           <div class="links">
             {% for link in links %}
-              <a href="{{link.url}}" target="_blank">{{ link.name | safe }}</a>
+              <a href="{{link.url}}" target="_blank">{{ link.icon | safe }}</a>
             {% endfor %}
           </div>
         {% endif %}
@@ -45,6 +45,11 @@
   .main-header {
     height: 20rem;
     width: 100%;
+  }
+
+  .links > a > i {
+    font-size: 20px;
+    margin-right: 10px;
   }
 
   .main-header > div, .main-header-post > div {
